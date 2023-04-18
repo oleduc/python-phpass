@@ -6,7 +6,7 @@
 # 
 
 #CHECK: use pyDES instead of the native crypt module?
-
+import math
 import os
 import time
 import hashlib
@@ -30,13 +30,13 @@ else:
 
 class PasswordHash:
     
-    def __init__(self, iteration_count_log2=8, portable_hashes=True, 
-         algorithm=''):
+    def __init__(self, iteration_count_log2=8, portable_hashes=True, algorithm=''):
         alg = algorithm.lower()
         if (alg == 'blowfish' or alg == 'bcrypt') and _bcrypt_hashpw is None:
             raise NotImplementedError('The bcrypt module is required')
-        self.itoa64 = \
-            './0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+
+        self.itoa64 = './0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+
         if iteration_count_log2 < 4 or iteration_count_log2 > 31:
             iteration_count_log2 = 8
         self.iteration_count_log2 = iteration_count_log2
@@ -65,17 +65,17 @@ class PasswordHash:
         outp = ''
         cur = 0
         while cur < count:
-            value = ord(inp[cur])
+            value = inp[cur]
             cur += 1
             outp += self.itoa64[value & 0x3f]
             if cur < count:
-                value |= (ord(inp[cur]) << 8)
+                value |= (inp[cur] << 8)
             outp += self.itoa64[(value >> 6) & 0x3f]
             if cur >= count:
                 break
             cur += 1
             if cur < count:
-                value |= (ord(inp[cur]) << 16)
+                value |= (inp[cur] << 16)
             outp += self.itoa64[(value >> 12) & 0x3f]
             if cur >= count:
                 break
@@ -90,12 +90,18 @@ class PasswordHash:
         return outp
     
     def crypt_private(self, pw, setting):
-        outp = '*0'
+        outp = '*0'.encode()
+
+        try:
+            setting = setting.encode()
+        except (UnicodeDecodeError, AttributeError):
+            pass
+
         if setting.startswith(outp):
             outp = '*1'
-        if not setting.startswith('$P$') and not setting.startswith('$H$'):
+        if not setting.startswith('$P$'.encode()) and not setting.startswith('$H$'.encode()):
             return outp
-        count_log2 = self.itoa64.find(setting[3])
+        count_log2 = self.itoa64.find(setting.decode()[3])
         if count_log2 < 7 or count_log2 > 30:
             return outp
         count = 1 << count_log2
@@ -104,11 +110,11 @@ class PasswordHash:
             return outp
         if not isinstance(pw, str):
             pw = pw.encode('utf-8')
-        hx = hashlib.md5(salt + pw).digest()
+        hx = hashlib.md5(salt + pw.encode()).digest()
         while count:
-            hx = hashlib.md5(hx + pw).digest()
+            hx = hashlib.md5(hx + pw.encode()).digest()
             count -= 1
-        return setting[:12] + self.encode64(hx, 16)
+        return setting.decode()[:12] + self.encode64(hx, 16)
     
     def gensalt_extended(self, inp):
         count_log2 = min([self.iteration_count_log2 + 8, 24])
@@ -125,24 +131,24 @@ class PasswordHash:
         itoa64 = \
             './ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
         outp = '$2a$'
-        outp += chr(ord('0') + self.iteration_count_log2 / 10)
-        outp += chr(ord('0') + self.iteration_count_log2 % 10)
+        outp += chr(math.floor(ord('0') + self.iteration_count_log2 / 10))
+        outp += chr(math.floor(ord('0') + self.iteration_count_log2 % 10))
         outp += '$'
         cur = 0
         while True:
-            c1 = ord(inp[cur])
+            c1 = inp[cur]
             cur += 1
             outp += itoa64[c1 >> 2]
             c1 = (c1 & 0x03) << 4
             if cur >= 16:
                 outp += itoa64[c1]
                 break
-            c2 = ord(inp[cur])
+            c2 = inp[cur]
             cur += 1
             c1 |= c2 >> 4
             outp += itoa64[c1]
             c1 = (c2 & 0x0f) << 2
-            c2 = ord(inp[cur])
+            c2 = inp[cur]
             cur += 1
             c1 |= c2 >> 6
             outp += itoa64[c1]
@@ -152,15 +158,15 @@ class PasswordHash:
     def hash_password(self, pw):
         rnd = ''
         alg = self.algorithm.lower()
-        if (not alg or alg == 'blowfish' or alg == 'bcrypt') \
-             and not self.portable_hashes:
+
+        if (not alg or alg == 'blowfish' or alg == 'bcrypt') and not self.portable_hashes:
             if _bcrypt_hashpw is None:
                 if (alg == 'blowfish' or alg == 'bcrypt'):
                     raise NotImplementedError('The bcrypt module is required')
             else:
                 rnd = self.get_random_bytes(16)
                 salt = self.gensalt_blowfish(rnd)
-                hx = _bcrypt_hashpw(pw, salt)
+                hx = _bcrypt_hashpw(pw.encode(), salt.encode())
                 if len(hx) == 60:
                     return hx
         if (not alg or alg == 'ext-des') and not self.portable_hashes:
@@ -178,12 +184,17 @@ class PasswordHash:
     
     def check_password(self, pw, stored_hash):
         # This part is different with the original PHP
-        if stored_hash.startswith('$2a$'):
+        try:
+            stored_hash = stored_hash.encode()
+        except (UnicodeDecodeError, AttributeError):
+            pass
+
+        if stored_hash.startswith('$2a$'.encode()):
             # bcrypt
             if _bcrypt_hashpw is None:
                 raise NotImplementedError('The bcrypt module is required')
-            hx = _bcrypt_hashpw(pw, stored_hash)
-        elif stored_hash.startswith('_'):
+            hx = _bcrypt_hashpw(pw.encode(), stored_hash)
+        elif stored_hash.startswith('_'.encode()):
             # ext-des
             hx = crypt.crypt(pw, stored_hash)
         else:
@@ -200,7 +211,7 @@ if __name__ == "__main__":
         pw2 = getpass.getpass('Retype password: ')
         if pw == pw2:
             break
-        print "Both passwords must be the same"
+        print("Both passwords must be the same")
     t_hasher = PasswordHash(8, True)
-    print "Password hash: " + t_hasher.hash_password(pw)
+    print("Password hash: " + t_hasher.hash_password(pw))
 
