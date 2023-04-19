@@ -51,13 +51,13 @@ class PasswordHash:
             outp = os.urandom(count)
         except:
             pass
+
         if len(outp) < count:
-            outp = ''
+            outp = b''
             rem = count
             while rem > 0:
-                self.random_state = hashlib.md5(str(time.time()) 
-                    + self.random_state).hexdigest()
-                outp += hashlib.md5(self.random_state).digest()
+                self.random_state = hashlib.md5((str(time.time()) + self.random_state).encode()).hexdigest()
+                outp += hashlib.md5(self.random_state.encode()).digest()
                 rem -= 1
             outp = outp[:count]
         return outp
