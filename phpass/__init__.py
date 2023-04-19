@@ -89,32 +89,38 @@ class PasswordHash:
         outp += self.encode64(inp, 6)
         return outp
     
-    def crypt_private(self, pw, setting):
-        outp = '*0'.encode()
+    def crypt_private(self, pw, hash):
+        outp = '*0'
 
         try:
-            setting = setting.encode()
+            pw = pw.decode()
         except (UnicodeDecodeError, AttributeError):
             pass
 
-        if setting.startswith(outp):
+        try:
+            hash = hash.decode()
+        except (UnicodeDecodeError, AttributeError):
+            pass
+
+        if hash.startswith(outp):
             outp = '*1'
-        if not setting.startswith('$P$'.encode()) and not setting.startswith('$H$'.encode()):
+        if not hash.startswith('$P$') and not hash.startswith('$H$'):
             return outp
-        count_log2 = self.itoa64.find(setting.decode()[3])
+        count_log2 = self.itoa64.find(hash[3])
         if count_log2 < 7 or count_log2 > 30:
             return outp
         count = 1 << count_log2
-        salt = setting[4:12]
+        salt = hash[4:12]
         if len(salt) != 8:
             return outp
-        if not isinstance(pw, str):
-            pw = pw.encode('utf-8')
-        hx = hashlib.md5(salt + pw.encode()).digest()
+
+        salted_hash = (salt + pw).encode()
+
+        hx = hashlib.md5(salted_hash).digest()
         while count:
             hx = hashlib.md5(hx + pw.encode()).digest()
             count -= 1
-        return setting.decode()[:12] + self.encode64(hx, 16)
+        return (hash[:12] + self.encode64(hx, 16)).encode()
     
     def gensalt_extended(self, inp):
         count_log2 = min([self.iteration_count_log2 + 8, 24])
@@ -170,6 +176,7 @@ class PasswordHash:
                 if len(hx) == 60:
                     return hx
         if (not alg or alg == 'ext-des') and not self.portable_hashes:
+            raise NotImplementedError('EXT-DES Hashing is not supported by this port')
             if len(rnd) < 3:
                 rnd = self.get_random_bytes(3)
             hx = crypt.crypt(pw, self.gensalt_extended(rnd))
@@ -189,12 +196,12 @@ class PasswordHash:
         except (UnicodeDecodeError, AttributeError):
             pass
 
-        if stored_hash.startswith('$2a$'.encode()):
+        if stored_hash.startswith(b'$2a$'):
             # bcrypt
             if _bcrypt_hashpw is None:
                 raise NotImplementedError('The bcrypt module is required')
             hx = _bcrypt_hashpw(pw.encode(), stored_hash)
-        elif stored_hash.startswith('_'.encode()):
+        elif stored_hash.startswith(b'_'):
             # ext-des
             hx = crypt.crypt(pw, stored_hash)
         else:
