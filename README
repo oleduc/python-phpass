@@ -11,7 +11,9 @@ applications for sure.
 The original PHP version: http://www.openwall.com/phpass/
 PHP version written by Solar Designer.
 
-Python implementation by exavolt <exavolt@gmail.com>
+Python implementation initially developed by exavolt <exavolt@gmail.com> and ported to python 3.10 by oleduc <pro@leduc.cc>
+
+*Note that this port does not support Extended DES Hashing*
 
 Dependencies
 ------------

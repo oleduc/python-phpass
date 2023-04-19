@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # 
-# phpass version: 0.3 / genuine.
+# phpass version: 0.3 / oleduc-python-port.
+# https://github.com/oleduc/python-phpass
 # 
 # Placed in public domain
 # 
